@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DiscordBot.Utils
@@ -13,19 +13,43 @@ namespace DiscordBot.Utils
         private static TaskQueue _taskQueue = new();
         private static Queue<SongInfo> _songQueue = new();
         private static float GlobalVolume = 1.0f; // Global volume (1.0 = 100%)
-        
+
         public static List<SongInfo> GetSongQueue()
         {
             return _songQueue.ToList();
         }
 
-        public static async Task EnqueueYoutubeTask(IAudioClient client, string videoUrl, string title)
+        public static async Task EnqueueYoutubeTask(IAudioClient client, string videoUrl, string title, CancellationToken cancellationToken)
         {
-            _songQueue.Enqueue(new SongInfo(title, videoUrl));
-            await _taskQueue.Enqueue(() => SendAsyncYoutube(client, videoUrl));
+            var songInfo = new SongInfo(title, videoUrl);
+            _songQueue.Enqueue(songInfo);
+
+            // Start playing the song immediately if no song is currently playing
+            if (_songQueue.Count == 1)
+            {
+                await PlayNextSong(client, cancellationToken);
+            }
         }
 
-        private static async Task SendAsync(IAudioClient client, string path)
+        public static async Task PlayNextSong(IAudioClient client, CancellationToken cancellationToken)
+        {
+            if (_songQueue.Count == 0)
+                return;
+
+            var nextSong = _songQueue.Peek();
+            await SendAsyncYoutube(client, nextSong.Url, cancellationToken);
+
+            // Remove the song from the queue after it finishes playing
+            _songQueue.Dequeue();
+
+            // Play the next song in the queue
+            if (_songQueue.Count > 0)
+            {
+                await PlayNextSong(client, cancellationToken);
+            }
+        }
+
+        private static async Task SendAsync(IAudioClient client, string path, CancellationToken cancellationToken)
         {
             var ffmpeg = CreateStream(path);
             var output = ffmpeg.StandardOutput.BaseStream;
@@ -33,8 +57,12 @@ namespace DiscordBot.Utils
 
             try
             {
-                await output.CopyToAsync(discord);
-                await discord.FlushAsync();
+                await output.CopyToAsync(discord, cancellationToken);
+                await discord.FlushAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Audio streaming was canceled.");
             }
             catch (Exception ex)
             {
@@ -47,18 +75,14 @@ namespace DiscordBot.Utils
             }
         }
 
-        private static async Task SendAsyncYoutube(IAudioClient client, string videoUrl)
+        private static async Task SendAsyncYoutube(IAudioClient client, string videoUrl, CancellationToken cancellationToken)
         {
-            // Generate a unique filename using GUID
-            string fileName = $"{Guid.NewGuid()}.mp4";
-
-            // Start yt-dlp process to download the audio
             var ytDlpProcess = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "yt-dlp",
-                    Arguments = $"-f bestaudio --no-playlist -o \"{fileName}\" {videoUrl}",
+                    Arguments = $"-f bestaudio -g {videoUrl}",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true
@@ -66,7 +90,8 @@ namespace DiscordBot.Utils
             };
 
             ytDlpProcess.Start();
-            await ytDlpProcess.WaitForExitAsync(); // Wait for yt-dlp to finish
+            string streamUrl = await ytDlpProcess.StandardOutput.ReadLineAsync();
+            await ytDlpProcess.WaitForExitAsync();
 
             if (ytDlpProcess.ExitCode != 0)
             {
@@ -75,33 +100,25 @@ namespace DiscordBot.Utils
                 return;
             }
 
-            // Use the downloaded file with ffmpeg
-            await SendAsync(client, fileName);
-            // Remove the song from the queue after playing
-            if (_songQueue.Count > 0)
-            {
-                _songQueue.Dequeue();
-            }
+            await SendAsync(client, streamUrl, cancellationToken);
         }
 
-
-        private static Process CreateStream(string path)
+        private static Process CreateStream(string url)
         {
             var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "ffmpeg",
-                    Arguments = $"-hide_banner -loglevel error -i \"{path}\" -af \"volume={GlobalVolume}\" -ac 2 -f s16le -ar 48000 pipe:1",
+                    Arguments = $"-hide_banner -loglevel error -i \"{url}\" -af \"volume={GlobalVolume}\" -ac 2 -f s16le -ar 48000 pipe:1",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
-                    RedirectStandardError = true // Redirect standard error to capture ffmpeg errors
+                    RedirectStandardError = true
                 }
             };
 
             process.Start();
 
-            // Log any errors from ffmpeg
             Task.Run(() =>
             {
                 string line;
@@ -116,7 +133,6 @@ namespace DiscordBot.Utils
 
         public static async Task<string> GetSongTitle(string videoUrl)
         {
-            // Start yt-dlp process to get the title
             var ytDlpProcess = new Process
             {
                 StartInfo = new ProcessStartInfo
@@ -131,7 +147,7 @@ namespace DiscordBot.Utils
 
             ytDlpProcess.Start();
             string title = await ytDlpProcess.StandardOutput.ReadLineAsync();
-            await ytDlpProcess.WaitForExitAsync(); // Wait for yt-dlp to finish
+            await ytDlpProcess.WaitForExitAsync();
 
             if (ytDlpProcess.ExitCode != 0)
             {
@@ -140,19 +156,20 @@ namespace DiscordBot.Utils
                 return null;
             }
 
-            return title; // Return the title of the song
+            return title;
         }
+
     }
+
     public class SongInfo
     {
-        public string Title;
-        public string Url;
+        public string Title { get; }
+        public string Url { get; }
+
         public SongInfo(string title, string url)
         {
-            this.Title = title;
-            this.Url = url;
+            Title = title;
+            Url = url;
         }
     }
 }
-
-

@@ -2,6 +2,7 @@
 using Discord.Audio;
 using Discord.Net;
 using Discord.WebSocket;
+using DiscordBot.AudioBot;
 using DiscordBot.Commands;
 using Newtonsoft.Json;
 using System;
@@ -11,17 +12,8 @@ using System.Threading.Tasks;
 
 public class Program
 {
-    private const string COMMAND_PLAY = "play";
-    private const string COMMAND_QUEUE = "queue";
-    private const string COMMAND_SKIP = "skip";
-    private const string COMMAND_VOLUME = "volume";
-    private const string COMMAND_LEAVE = "leave";
-
-
     private static DiscordSocketClient _client;
     private static IAudioClient _audioClient;
-
-
 
     public static async Task Main()
     {
@@ -40,6 +32,7 @@ public class Program
 
         // Hook into the Ready event
         _client.Ready += Client_Ready;
+        _client.ReactionAdded += ReactionAddedAsync;
 
         // Block this task until the program is closed.
         await Task.Delay(-1);
@@ -60,6 +53,45 @@ public class Program
     private static async Task SlashCommandHandler(SocketSlashCommand command)
     {
         await CommandManager.Instance.ExecuteCommand(command);
+    }
+
+    private static async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
+    {
+        // Ensure the message is cached
+        var message = await cacheable.GetOrDownloadAsync();
+        if (message == null) return;
+        if (!YoutubeSearcher.ResultsReady) return;
+        // Check if the reaction is the one you're interested in
+        // Replace with your custom emoji ID and name
+        var emojiIds = new ulong[] { 429753831199342592, 466478794367041557, 466477774455177247, 582418378178822144 };
+        for (int i = 0; i < emojiIds.Length; i++)
+        {
+            var emote = Emote.Parse($"<:warrior{i}:{emojiIds[i]}>");
+
+            if (reaction.Emote is Emote e && e.Id == emojiIds[i])
+            {
+                var user = reaction.User.IsSpecified ? reaction.User.Value : null;
+                if (user == null) return;
+                if (user.IsBot) return;
+
+                YoutubeSearcher.ResultsReady = false;
+
+                Console.WriteLine($"{user.Username} added the reaction {emote.Name} to the message {message.Id}");
+                _ = Task.Run(async () =>
+                {
+                    await AudioManager.Instance.PlaySong(YoutubeSearcher.YoutubeResults[i].Title, YoutubeSearcher.YoutubeResults[i].Url);
+                });
+                await message.ModifyAsync((m) => m.Content = $"Adding {YoutubeSearcher.YoutubeResults[i].Title} to Queue");
+                // Handle the reaction added event as needed
+                // Wait for the specified delay
+                await Task.Delay(5 * 1000);
+
+                // Delete the message
+                await message.DeleteAsync();
+            }
+        }
+
+       
     }
 
     private static Task Log(LogMessage msg)
