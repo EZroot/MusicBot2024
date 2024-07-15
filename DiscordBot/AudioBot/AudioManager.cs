@@ -80,6 +80,12 @@ namespace DiscordBot.AudioBot
         public async Task SongQueue(SocketSlashCommand command)
         {
             var songs = AudioRipper.GetSongQueue();
+            if(songs == null || songs.Count == 0)
+            {
+                await command.RespondAsync("No songs in queue, dumbass", ephemeral: true);
+                return;
+            }
+
             var result = "";
             for (var i = 0; i < songs.Count; i++)
                 result += $"***#{i + 1}*** {songs[i].Title}\n";
@@ -169,7 +175,14 @@ namespace DiscordBot.AudioBot
 
         private void Log(string text)
         {
-            Console.WriteLine($"[AudioManager] {text}");
+            string timeStamp = DateTime.Now.ToString("HH:mm:ss"); // Format to include only hour, minute, and second
+
+            Console.ForegroundColor = ConsoleColor.DarkMagenta; // Purple color
+            Console.Write($"{timeStamp} [AudioManager] ");
+            Console.ForegroundColor = ConsoleColor.Green; // Green color
+            Console.WriteLine(text);
+            Console.ResetColor(); // Reset to default color
         }
+
     }
 }

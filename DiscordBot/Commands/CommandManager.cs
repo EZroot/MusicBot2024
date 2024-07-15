@@ -63,7 +63,7 @@ namespace DiscordBot.Commands
         {
             if (_commands.TryGetValue(slashCommand.Data.Name, out var command))
             {
-                Log($"Executing {slashCommand.Data.Name} By {slashCommand.User.Username}");
+                Log($"{slashCommand.User.Username}:> {slashCommand.Data.Name}");
                 await command.ExecuteAsync(slashCommand);
             }
             else
@@ -97,7 +97,12 @@ namespace DiscordBot.Commands
 
         private void Log(string text)
         {
-            Console.WriteLine($"[CommandManager] {text}");
+            string timeStamp = DateTime.Now.ToString("HH:mm:ss"); // Format to include only hour, minute, and second
+            Console.ForegroundColor = ConsoleColor.Yellow; // Purple color
+            Console.Write($"{timeStamp} [CommandManager] ");
+            Console.ForegroundColor = ConsoleColor.White; // Green color
+            Console.WriteLine(text);
+            Console.ResetColor(); // Reset to default color
         }
     }
 }

@@ -1,10 +1,6 @@
-﻿using Discord.Audio;
-using System;
-using System.Collections.Generic;
+﻿using Discord;
+using Discord.Audio;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace DiscordBot.Utils
 {
@@ -37,7 +33,9 @@ namespace DiscordBot.Utils
                 return;
 
             var nextSong = _songQueue.Peek();
-            await SendAsyncYoutube(client, nextSong.Url, cancellationToken);
+            // Update status when the bot is ready
+            await BotManager.Instance.Client.SetGameAsync($"Playing {nextSong.Title}");
+            await SendAsync(client, nextSong.Url, cancellationToken);
 
             // Remove the song from the queue after it finishes playing
             _songQueue.Dequeue();
@@ -47,11 +45,27 @@ namespace DiscordBot.Utils
             {
                 await PlayNextSong(client, cancellationToken);
             }
+            else
+            {
+                await BotManager.Instance.Client.SetGameAsync($"Dominating the world...");
+            }
         }
 
-        private static async Task SendAsync(IAudioClient client, string path, CancellationToken cancellationToken)
+        public static async Task SendAsync(IAudioClient client, string url, CancellationToken cancellationToken)
         {
-            var ffmpeg = CreateStream(path);
+            if (IsYouTubeUrl(url))
+            {
+                await SendAsyncYoutube(client, url, cancellationToken);
+            }
+            else
+            {
+                await SendAsyncDirect(client, url, cancellationToken);
+            }
+        }
+
+        private static async Task SendAsyncDirect(IAudioClient client, string url, CancellationToken cancellationToken)
+        {
+            var ffmpeg = CreateStream(url);
             var output = ffmpeg.StandardOutput.BaseStream;
             var discord = client.CreatePCMStream(AudioApplication.Mixed);
 
@@ -100,7 +114,7 @@ namespace DiscordBot.Utils
                 return;
             }
 
-            await SendAsync(client, streamUrl, cancellationToken);
+            await SendAsyncDirect(client, streamUrl, cancellationToken);
         }
 
         private static Process CreateStream(string url)
@@ -121,10 +135,17 @@ namespace DiscordBot.Utils
 
             Task.Run(() =>
             {
-                string line;
-                while ((line = process.StandardError.ReadLine()) != null)
+                try
                 {
-                    Console.WriteLine($"ffmpeg error: {line}");
+                    string line;
+                    while ((line = process.StandardError.ReadLine()) != null)
+                    {
+                        Console.WriteLine($"ffmpeg error: {line}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error reading ffmpeg output: {ex.Message}");
                 }
             });
 
@@ -159,6 +180,10 @@ namespace DiscordBot.Utils
             return title;
         }
 
+        private static bool IsYouTubeUrl(string url)
+        {
+            return url.Contains("youtube.com") || url.Contains("youtu.be");
+        }
     }
 
     public class SongInfo
