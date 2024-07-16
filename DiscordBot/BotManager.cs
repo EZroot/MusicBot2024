@@ -53,10 +53,9 @@ namespace DiscordBot
 
             _client.Log += Log;
 
-            // Ensure your bot token is stored securely.
-            var token = "Mzg3MjY5Nzc1MjY2NDE0NTky.G_y_DH.9LGrHOJrUGbDgr1hUbxvhDR5maoS4jBdiKX4R0";  // Replace with your actual bot token.
+            var token = ConfigManager.LoadConfig();
 
-            await _client.LoginAsync(TokenType.Bot, token);
+            await _client.LoginAsync(TokenType.Bot, token.ApiKey);
             await _client.StartAsync();
 
             // Hook into the Ready event

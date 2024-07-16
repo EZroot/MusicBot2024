@@ -48,8 +48,7 @@ namespace DiscordBot.AudioBot
             await command.RespondAsync(text: $"Searching: `{videoUrl}`", ephemeral: true);
 
             string title = await AudioRipper.GetSongTitle(videoUrl);
-            await command.FollowupAsync(text: $"Added **{title}** to Queue!", ephemeral: true);
-            await command.DeleteOriginalResponseAsync();
+            await command.ModifyOriginalResponseAsync((m) => m.Content = $"Added **{title}** to Queue!");
             Log($"[{command.User.Username}] Added {title} to Queue");
 
             if (videoUrl != null)
@@ -97,12 +96,17 @@ namespace DiscordBot.AudioBot
         {
             Log($"[{command.User.Username}] Skipping song");
             _cancellationTokenSource?.Cancel();
-            await command.RespondAsync(text: $"Song skipped.", ephemeral: true);
+            await command.RespondAsync(text: "Song skipped.", ephemeral: true);
+
+            // Ensure the previous task is fully cancelled
+            await AudioRipper.PlaybackSemaphore.WaitAsync();
+            AudioRipper.PlaybackSemaphore.Release();
 
             // Reset the cancellation token and play the next song
             _cancellationTokenSource = new CancellationTokenSource();
             await AudioRipper.PlayNextSong(_audioClient, _cancellationTokenSource.Token);
         }
+
 
         public async Task StopSong(SocketSlashCommand command)
         {
