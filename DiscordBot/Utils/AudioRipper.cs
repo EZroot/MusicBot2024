@@ -104,23 +104,35 @@ namespace DiscordBot.Utils
 
         private static async Task SendAsyncDirect(IAudioClient client, string url, CancellationToken cancellationToken)
         {
-            await _ffmpegSemaphore.WaitAsync();
-            var ffmpeg = CreateStream(url);
-            var output = ffmpeg.StandardOutput.BaseStream;
-            var discord = client.CreatePCMStream(AudioApplication.Mixed);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await _ffmpegSemaphore.WaitAsync();
+                var ffmpeg = CreateStream(url);
+                var output = ffmpeg.StandardOutput.BaseStream;
+                var discord = client.CreatePCMStream(AudioApplication.Mixed);
 
-            try
-            {
-                await output.CopyToAsync(discord, cancellationToken);
-                await discord.FlushAsync(cancellationToken);
-            }
-            finally
-            {
-                await discord.DisposeAsync();
-                ffmpeg.Dispose();
-                _ffmpegSemaphore.Release();
+                try
+                {
+                    await output.CopyToAsync(discord, cancellationToken);
+                    await discord.FlushAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    // Handle the exception (log it, notify the user, etc.)
+                    Console.WriteLine($"Error occurred: {ex.Message}");
+                }
+                finally
+                {
+                    await discord.DisposeAsync();
+                    ffmpeg.Dispose();
+                    _ffmpegSemaphore.Release();
+                }
+
+                // Optionally, add a delay before retrying to avoid spamming
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
             }
         }
+
 
         private static async Task SendAsyncYoutube(IAudioClient client, string videoUrl, CancellationToken cancellationToken)
         {
@@ -171,23 +183,23 @@ namespace DiscordBot.Utils
 
             process.Start();
 
-            //Task.Run(() =>
-            //{
-            //    try
-            //    {
-            //        string line;
-            //        while ((line = process.StandardError.ReadLine()) != null)
-            //        {
-            //            Console.WriteLine($"ffmpeg error: {line}");
-            //            // Log ffmpeg errors here if needed
-            //        }
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        Console.WriteLine($"Error reading ffmpeg output: {ex.Message}");
-            //        // Log the exception here if needed
-            //    }
-            //});
+            Task.Run(() =>
+            {
+                try
+                {
+                    string line;
+                    while ((line = process.StandardError.ReadLine()) != null)
+                    {
+                        Console.WriteLine($"ffmpeg error: {line}");
+                        // Log ffmpeg errors here if needed
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error reading ffmpeg output: {ex.Message}");
+                    // Log the exception here if needed
+                }
+            });
 
             return process;
         }

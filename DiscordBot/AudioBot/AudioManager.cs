@@ -107,14 +107,6 @@ namespace DiscordBot.AudioBot
             await AudioRipper.PlayNextSong(_audioClient, _cancellationTokenSource.Token);
         }
 
-
-        public async Task StopSong(SocketSlashCommand command)
-        {
-            Log($"[{command.User.Username}] Stopping song");
-            _cancellationTokenSource?.Cancel();
-            await command.RespondAsync(text: $"Playback stopped.", ephemeral: true);
-        }
-
         public async Task ChangeVolume(SocketSlashCommand command)
         {
             Log($"[{command.User.Username}] Changing volume");
