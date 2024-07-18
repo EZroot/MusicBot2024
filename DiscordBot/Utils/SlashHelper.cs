@@ -21,6 +21,7 @@ namespace DiscordBot.Utils
                 }
             });
         }
+
         private static async Task SlashCommandClear(SocketGuild guild)
         {
             // Clear existing commands
