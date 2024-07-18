@@ -1,6 +1,5 @@
-# MusicBot ![image](https://github.com/user-attachments/assets/d1d637e6-d733-4c7a-8c2f-1858c941abc0)
-
-2024 Music Bot for Discord
+![image](https://github.com/user-attachments/assets/d1d637e6-d733-4c7a-8c2f-1858c941abc0)
+# 2024 Music Bot for Discord
 
 * Requires `yt-dlp` and `ffmpeg`
 * Requires Opus/Libsodium which are included in `/bin/`
